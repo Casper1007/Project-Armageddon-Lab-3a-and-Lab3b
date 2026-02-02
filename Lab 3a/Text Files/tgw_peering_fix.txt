@@ -1,0 +1,57 @@
+TGW Peering Route Error Fix
+
+Issue
+- Error: IncorrectState when creating TGW route in Tokyo (peering attachment not yet available).
+
+Root Cause
+- The TGW peering attachment is in a pending state when Terraform tries to create:
+  - TGW route table association
+  - TGW route table propagation
+  - TGW route to the peer VPC CIDR
+
+Fix Implemented
+- Gate peering-related resources so they only create after the peering attachment state is "available".
+- Use a data lookup on the peering attachment to check its state.
+- Create peering association/propagation/routes only when state == "available".
+
+Files Updated
+- tokyo_tgw.tf
+  - Added data source to read peering attachment state
+  - Added locals to compute availability
+  - Guarded TGW assoc/prop/route with state check
+  - Disabled TGW default association/propagation to prevent auto-association conflicts
+
+- saopaulo/sao_paulo_tgw.tf
+  - Added data source to read accepted peering attachment state
+  - Added locals to compute availability
+  - Guarded TGW assoc/prop/route with state check
+  - Disabled TGW default association/propagation to prevent auto-association conflicts
+
+Apply Order
+1) Apply Sao Paulo first (accepts peering).
+2) Apply Tokyo after Sao Paulo shows the attachment as available.
+
+Optional
+- Re-run apply to create the peering routes once the attachment transitions to available.
+
+AlreadyAssociated Error (TGW VPC Attachment)
+Issue
+- Error: Resource.AlreadyAssociated when associating the VPC attachment to the TGW route table.
+
+Cause
+- The attachment was automatically associated to the TGW default route table before Terraform took control.
+
+Fix
+1) In AWS Console (Tokyo and Sao Paulo TGW route tables):
+   - Disassociate the VPC attachment from the default TGW route table (one-time cleanup).
+2) Re-run Terraform apply.
+
+CLI one-time disassociate (Tokyo example)
+- aws ec2 disassociate-transit-gateway-route-table --transit-gateway-route-table-id tgw-rtb-0f56adf6400080f58 --transit-gateway-attachment-id tgw-attach-0b12507aac954345f --region ap-northeast-1
+
+Prevention
+- Default association/propagation is disabled in Terraform for both TGWs and VPC attachments.
+
+Resolution
+- Disassociated the Tokyo VPC attachment from the non-managed TGW route table (tgw-rtb-07cb1a866d62d1b98).
+- Terraform apply then succeeded.
