@@ -1,0 +1,108 @@
+Lab 3A — TGW Between Tokyo + São Paulo (RDS in Tokyo Only)
+Key reality check (important)
+
+Transit Gateway is regional.
+So you don’t “attach São Paulo VPC to Tokyo TGW” directly.
+You do this instead:
+    TGW in Tokyo
+    TGW in São Paulo
+    TGW Peering Attachment between them
+    Each VPC attaches to its local TGW
+    Routes propagate across the peering
+    
+That’s the correct enterprise pattern.
+
+1) How should São Paulo Terraform change once TGW is established?
+What São Paulo removes (from Lab 2)
+São Paulo does NOT deploy:
+    RDS
+    RDS subnet group
+    RDS SG rules for local DB
+    Any “DB in-region” alarms that assume local DB connectivity
+
+What São Paulo adds (new for Lab 3A)
+São Paulo adds:
+  A. A new VPC (same Lab 2 structure: public/private, NAT, ALB, ASG, CloudFront origin header rules)
+  B. A Transit Gateway (sa-east-1) and VPC attachment
+  C. Routes:
+    São Paulo private subnets route Tokyo VPC CIDR → São Paulo TGW
+  D. Optionally: Secrets Manager replica / Parameter Store copies of DB endpoint (credentials aren’t PHI; still keep tight controls)
+
+The main code changes are routing + TGW attachment. Everything else is basically “Lab 2 but no DB.”
+
+2) How does São Paulo EC2 connect with Tokyo RDS?
+São Paulo EC2 connects to Tokyo RDS like it’s “another subnet,” but across AWS backbone:
+
+Network path
+    São Paulo EC2 (private subnet)
+    → São Paulo VPC route table: Tokyo-VPC-CIDR → TGW-SP
+    → TGW Peering → TGW Tokyo
+    → Tokyo VPC attachment
+    → Tokyo private subnet route table sends return traffic back via TGW
+    → RDS private IP reachable
+
+Security group rules (critical)
+Because SG referencing doesn’t work across VPCs the way people hope, the simplest correct pattern is:
+    Tokyo RDS SG allows inbound 3306 from São Paulo VPC CIDR (or from a dedicated SP app subnet CIDR)
+    São Paulo EC2 SG allows outbound to Tokyo RDS on 3306
+
+Also ensure:
+    VPC DNS resolution is enabled (it is by default in most lab VPCs)
+    RDS endpoint resolves to a private IP in Tokyo VPC (which your São Paulo instances can reach via TGW)
+
+3) How would São Paulo connect with Tokyo Transit Gateway?
+This is the actual TGW wiring:
+In Tokyo (minimal “marginal TF code”)
+    Tokyo TGW exists (or you create it)
+    Tokyo TGW attaches to Tokyo VPC
+    Tokyo TGW creates peering attachment request to São Paulo TGW
+
+In São Paulo (new TF)
+    Create São Paulo TGW
+    Accept TGW peering attachment
+    Attach São Paulo VPC to São Paulo TGW
+    Add routes in São Paulo VPC route tables pointing Tokyo CIDR → São Paulo TGW
+    Add routes in Tokyo VPC route tables pointing São Paulo CIDR → Tokyo TGW
+
+That’s it: attachments + routes + SG rules.
+
+Naming Convention Theme
+Tokyo names: train stations
+Examples:
+    shinjuku-* 新宿
+    shibuya-*　　渋谷
+    ueno-*　上野
+    akihabara-* 秋葉原
+    tokyo-*　東京
+
+    São Paulo names: Japanese-town-related
+
+Use the Japanese district:
+  liberdade-* (perfeita)
+  optionally: bairro-liberdade-*, praca-liberdade-*
+
+I’d standardize:
+  Tokyo prefix: shinjuku
+  São Paulo prefix: liberdade
+
+So students can immediately “feel” the region.  Maybe hard for you, easy for Darth Malgus.
+
+Terraform Blueprint (High-signal skeleton)
+A) Providers (multi-region)---> Folder provider.tf
+B) Tokyo (minimal additions) — TGW + peering request---> Folder tokyo_tgw.tf
+    (Tokyo already has Lab 2 infra + RDS.)
+C) São Paulo (new deployment) — TGW + accept peering + attach VPC---> Folder sao_paulo_tgw.tf
+    (São Paulo is “Lab 2 minus DB”, plus TGW wiring.)
+D) Routes (the “it works or it doesn’t” part)
+    São Paulo route tables --> sao_paulo_routes.tf
+        Add in private subnet route tables:  
+            Destination: Tokyo VPC CIDR (e.g., 10.0.0.0/16)
+            Target: São Paulo TGW
+    Tokyo route tables---> Tokyo_routes.tf
+        Add in Tokyo private route tables:
+            Destination: São Paulo VPC CIDR
+            Target: Tokyo TGW
+E) RDS Security Group change in Tokyo (allows São Paulo)---> aws_security_group.chrisbarm_rds_sg01.tf
+    This is the part students always forget because they are stuck in waffle house with them carbs:
+
+
