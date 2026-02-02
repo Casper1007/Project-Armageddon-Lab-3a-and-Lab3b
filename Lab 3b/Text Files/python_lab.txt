@@ -1,0 +1,46 @@
+Script 1 — malgus_alarm_triage.py
+What it does: Pulls active alarms, prints the worst ones, and summarizes alarm history.
+
+Script 2 — malgus_logsinsights_runner.py
+What it does: Runs a Logs Insights query on a log group and prints top results (WAF or app logs).
+
+Script 3 — malgus_waf_block_spike_detector.py
+What it does: Looks at WAF CloudWatch metrics (or WAF Logs if you prefer) and flags spikes in BLOCKs.
+
+Script 4 — malgus_secret_drift_checker.py
+What it does: Compares Secrets Manager DB creds vs expected SSM “known-good” fields (without printing the password).
+
+Script 5 — malgus_cloudfront_cache_probe.py
+What it does: Probes CloudFront endpoints and prints cache behavior (x-cache, age, etc.) to validate Lab 2B.
+
+Script 6 — malgus_origin_cloak_tester.py
+What it does: Confirms direct ALB access fails while CloudFront access succeeds (Lab 2 requirement).
+                                                                     
+Script 7 — malgus_bedrock_ir_generator_local.py
+What it does: Runs the Bedrock report generator locally against an evidence JSON file (great for testing prompts). 
+
+Script 8 — malgus_cost_guardrail_estimator.py
+What it does: Estimates “did we just create a cost bomb?” by checking CloudFront invalidations and WAF log volume signals (lightweight guardrail).
+
+Suggested way to assign these (so it doesn’t become random Python cosplay)
+Tier 1 (required for “scripters”)
+    1) Alarm triage
+    2) Logs Insights runner
+    3) Cache probe
+    4) Origin cloaking tester
+
+Tier 2 (advanced)
+    5) Secret drift checker
+    6) Bedrock local harness
+    7) WAF spike detector (metrics/logs)
+    8) Cost guardrail estimator
+
+One-liner interview framing (for all scripts)
+Tell them to use this template:
+      “I built a small Python automation that reduces time-to-triage by pulling authoritative AWS evidence (metrics/logs/config) and producing a consistent artifact I can hand to another engineer.”
+
+That’s exactly what hiring managers want to hear.
+
+
+
+                                                                     
